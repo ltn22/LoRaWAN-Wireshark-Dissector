@@ -1,0 +1,5 @@
+Legal Information
+Third Party Software
+Wireshark 2.1.0
+Copyright 1998-2015 Gerald Combs <gerald@wireshark.org> and contributors.
+License GPLv2+: GNU GPL version 2 or later <http://www.gnu.org/licenses/old-licenses/gpl-2.0.html>
