@@ -18,5 +18,5 @@ These instructions were written by Quentin Lampin at Orange Labs.
 
 ## License
 
-The SensorLab2 dissector is distributed under the terms of the License GPLv2+: GNU GPL version 2 to comply with the licensing terms of Wireshark.
+This dissector is distributed under the terms of the License GPLv2+: GNU GPL version 2 to comply with the licensing terms of Wireshark.
 
