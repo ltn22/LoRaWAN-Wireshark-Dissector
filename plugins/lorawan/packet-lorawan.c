@@ -123,7 +123,7 @@ dissect_lorawan(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
 {
         guint offset = 0;
 
-        printf ("running dissect_lorawan %d\n", (int) data);
+        //printf ("running dissect_lorawan %d\n", (int) data);
         col_set_str(pinfo->cinfo, COL_PROTOCOL, "LORA");
         col_clear(pinfo->cinfo, COL_INFO);
 
@@ -175,12 +175,12 @@ dissect_lorawan(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
             proto_tree_add_item(lorawan_tree, hf_lorawan_devaddr, tvb, offset, 4, ENC_LITTLE_ENDIAN);
             offset += 4;
             proto_tree_add_item(lorawan_tree, hf_lorawan_fctrl, tvb, offset, 1, ENC_LITTLE_ENDIAN);
-            guint8 adr = tvb_get_bits8(tvb, offset*8 + 0, 1);
-            guint8 ack = tvb_get_bits8(tvb, offset*8 + 2, 1);
-            guint8 fpending = tvb_get_bits8(tvb, offset*8 + 3, 1);
-            guint8 foptslen = tvb_get_bits8(tvb, offset*8 + 4, 4);
+            //guint8 adr = tvb_get_bits8(tvb, offset*8 + 0, 1);
+            //guint8 ack = tvb_get_bits8(tvb, offset*8 + 2, 1);
+            //guint8 fpending = tvb_get_bits8(tvb, offset*8 + 3, 1);
+            //guint8 foptslen = tvb_get_bits8(tvb, offset*8 + 4, 4);
             //guint8 foptslen = 0;
-            printf ("adr = %d; ack = %d; fpending = %d; foptslen = %d\n", adr, ack, fpending, foptslen);
+            //printf ("adr = %d; ack = %d; fpending = %d; foptslen = %d\n", adr, ack, fpending, foptslen);
             offset += 1;
             proto_tree_add_item(lorawan_tree, hf_lorawan_fcnt, tvb, offset, 2, ENC_LITTLE_ENDIAN);
             offset += 2;
