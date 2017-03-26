@@ -63,6 +63,9 @@ static value_string const mhdr_mtype[] = {
     {PROP,          "Proprietary"},
     {0,             NULL}
 };
+// MAC commands
+// a command is unknown if code > MAXKNOWNOPTION
+// or length reported by table is 0
 
 // uplink MAC commands
 #define LINKCHECKREQ     0x02
@@ -302,6 +305,7 @@ dissect_lorawan(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
             // process 0 to 15 bytes of Frame Options (FOpts)
             if (foptslen > 0) {
                 printf ("foptslen = %d\n", foptslen);
+                guint offset_to_options = offset; // remember index to beginning of options, in case we need to skip unknown options
                 proto_item *opts_item;
                 opts_item = proto_tree_add_item(lorawan_tree, hf_lorawan_fopts, tvb, offset, foptslen, ENC_NA);
                 proto_tree *opts_tree;
@@ -311,8 +315,17 @@ dissect_lorawan(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
                 while (remaining_optslen>0) {
                     guint8 foption;
                     foption = tvb_get_guint8(tvb, offset);
+                    // test for unknown option (either greater than MAXKNOWNOPTION or length in table is 0)
+                    if (foption > MAXKNOWNOPTION) {
+                        printf ("unknown MAC command code in FOptions : %d\n", foption);
+                        break;
+                    }
                     guint8 foption_length;
                     foption_length = (downlink_frame ? dl_command_length[foption] : ul_command_length[foption]);
+                    if (foption_length == 0) {
+                        printf ("unknown MAC command code in FOptions : %d\n", foption);
+                        break;
+                    }
                     if (foption_length<=remaining_optslen) { // double check that this option does not extend past the option bytes
                         proto_item *fopt_ti;
                         fopt_ti = proto_tree_add_item(opts_tree, hf_fopts_foption, tvb, offset, foption_length, ENC_NA);
@@ -361,13 +374,21 @@ dissect_lorawan(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
                         remaining_optslen -= foption_length;
                     }
                     else { // we have a problem, stop dissecting options and report
-                        printf ("%d extraneous bytes while processing options\n", remaining_optslen);
-
+                        printf ("%d extraneous bytes while processing frame options\n", remaining_optslen);
+                        break;
                     }
 
                 }
+                offset = offset_to_options + foptslen;
             }
             // if payload not empty, 1 byte of FPort and variable number of bytes of actual payload
+            guint payload_length;
+            if (tvb_reported_length(tvb) == tvb_captured_length(tvb)) {
+                payload_length = tvb_captured_length(tvb)-offset-4;
+            } else {
+                // case not covered, bail out
+                break;
+            }
             ;
             break;
         case PROP : 
