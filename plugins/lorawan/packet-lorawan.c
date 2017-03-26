@@ -1,6 +1,7 @@
 #include "config.h"
 
 #include <epan/packet.h>
+#include <stdbool.h>
 
 #define LORAWAN_PORT 2404
 
@@ -21,9 +22,11 @@ static int hf_mhdr_mtype = -1;
 static int hf_mhdr_rfu = -1;
 static int hf_mhdr_major = -1;
 static int hf_fctrl_adr = -1;
+static int hf_fctrl_rfu6 = -1;
 static int hf_fctrl_adrackreq = -1;
 static int hf_fctrl_ack = -1;
 static int hf_fctrl_fpending = -1;
+static int hf_fctrl_rfu4 = -1;
 static int hf_fctrl_foptslen = -1;
 static int hf_lorawan_fopts = -1;
 static int hf_fopts_foption = -1;
@@ -201,7 +204,6 @@ static int
 dissect_lorawan(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
 {
         guint offset = 0;
-        guint8 foptslen;
         void * temp; // this avoids a compile warning
         temp = data; // same
         data = temp; // same
@@ -225,8 +227,18 @@ dissect_lorawan(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
         proto_tree_add_item(mhdr_tree, hf_mhdr_major, tvb, offset, 1, mhdr);
         offset += 1;
 
+        bool downlink_frame; // DL if true, UL if false
+        if((mhdr & 1) == 1)  // odd-numbered Mtype frames happen to be all downlink, even-numbered uplink
+        {                    // beware of RFU and proprietary, though!
+            downlink_frame = true;
+        }
+        else
+        {
+            downlink_frame = false;
+        }       
 
         switch (mhdr) {
+        // Join messages
         case JOINREQUEST : 
             proto_tree_add_item(lorawan_tree, hf_lorawan_appeui, tvb, offset, 8, ENC_LITTLE_ENDIAN);
             offset += 8;
@@ -255,21 +267,33 @@ dissect_lorawan(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
             // process Frame Header (FHDR)
             proto_tree_add_item(lorawan_tree, hf_lorawan_devaddr, tvb, offset, 4, ENC_LITTLE_ENDIAN);
             offset += 4;
-            proto_tree_add_item(lorawan_tree, hf_lorawan_fctrl, tvb, offset, 1, ENC_LITTLE_ENDIAN);
-            guint8 adr;
-            adr = tvb_get_bits8(tvb, offset*8 + 0, 1);
-            guint8 ack;
-            ack = tvb_get_bits8(tvb, offset*8 + 2, 1);
-            guint8 fpending;
-            fpending = tvb_get_bits8(tvb, offset*8 + 3, 1);
+            proto_item *fctrl_ti;
+            fctrl_ti = proto_tree_add_item(lorawan_tree, hf_lorawan_fctrl, tvb, offset, 1, ENC_LITTLE_ENDIAN);
+            proto_tree *fctrl_tree;
+            fctrl_tree = proto_item_add_subtree(fctrl_ti, ett_fctrl);
+            if(downlink_frame == true)
+            {
+                proto_tree_add_item(fctrl_tree, hf_fctrl_adr, tvb, offset, 1, ENC_NA);
+                proto_tree_add_item(fctrl_tree, hf_fctrl_rfu6, tvb, offset, 1, ENC_NA);
+                proto_tree_add_item(fctrl_tree, hf_fctrl_ack, tvb, offset, 1, ENC_NA);
+                proto_tree_add_item(fctrl_tree, hf_fctrl_fpending, tvb, offset, 1, ENC_NA);
+                proto_tree_add_item(fctrl_tree, hf_fctrl_foptslen, tvb, offset, 1, ENC_NA);    
+            }
+            else
+            {
+                proto_tree_add_item(fctrl_tree, hf_fctrl_adr, tvb, offset, 1, ENC_NA);
+                proto_tree_add_item(fctrl_tree, hf_fctrl_adrackreq, tvb, offset, 1, ENC_NA);
+                proto_tree_add_item(fctrl_tree, hf_fctrl_ack, tvb, offset, 1, ENC_NA);
+                proto_tree_add_item(fctrl_tree, hf_fctrl_rfu4, tvb, offset, 1, ENC_NA);
+                proto_tree_add_item(fctrl_tree, hf_fctrl_foptslen, tvb, offset, 1, ENC_NA);
+            }
+            guint8 foptslen;
             foptslen = tvb_get_bits8(tvb, offset*8 + 4, 4);
-            //printf ("adr = %d; ack = %d; fpending = %d; foptslen = %d\n", adr, ack, fpending, foptslen);
             offset += 1;
             proto_tree_add_item(lorawan_tree, hf_lorawan_fcnt, tvb, offset, 2, ENC_LITTLE_ENDIAN);
             offset += 2;
             // process 0 to 15 bytes of Frame Options (FOpts)
             if (foptslen > 0) {
-
                 printf ("foptslen = %d\n", foptslen);
                 proto_item *opts_item;
                 opts_item = proto_tree_add_item(lorawan_tree, hf_lorawan_fopts, tvb, offset, foptslen, ENC_NA);
@@ -488,10 +512,22 @@ proto_register_lorawan(void)
             TFS(&tfs_set_notset), (1 << 6),
             NULL, HFILL
         }},
+        { &hf_fctrl_rfu6, {
+            "RFU", "lorawan.fctrl.rfu6",
+            FT_BOOLEAN, 8,
+            TFS(&tfs_set_notset), (1 << 6),
+            NULL, HFILL
+        }},
         { &hf_fctrl_ack, {
             "ACK", "lorawan.fctrl.ack",
             FT_BOOLEAN, 8,
             TFS(&tfs_ack_nack), (1 << 5),
+            NULL, HFILL
+        }},
+        { &hf_fctrl_rfu4, {
+            "RFU", "lorawan.fctrl.rfu4",
+            FT_BOOLEAN, 8,
+            TFS(&tfs_set_notset), (1 << 4),
             NULL, HFILL
         }},
         { &hf_fctrl_fpending, {
@@ -549,7 +585,7 @@ proto_register_lorawan(void)
     proto_register_subtree_array(ett, array_length(ett));
     
     /*  Register dissectors with Wireshark. */
-    register_dissector("lorawan", dissect_lorawan, proto_lorawan);
+    register_dissector("lorawan", (dissector_t) dissect_lorawan, proto_lorawan);
     }
 
 void
