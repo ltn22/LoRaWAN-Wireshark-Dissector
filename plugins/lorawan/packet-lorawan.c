@@ -305,7 +305,7 @@ dissect_lorawan(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
             // process 0 to 15 bytes of Frame Options (FOpts)
             if (foptslen > 0) {
                 printf ("foptslen = %d\n", foptslen);
-                guint offset_to_options = offset; // remember index to beginning of options, in case we need to skip unknown options
+                guint offset_to_options = offset; // remember index to beginning of options, in case we need to skip over unknown options
                 proto_item *opts_item;
                 opts_item = proto_tree_add_item(lorawan_tree, hf_lorawan_fopts, tvb, offset, foptslen, ENC_NA);
                 proto_tree *opts_tree;
@@ -333,42 +333,40 @@ dissect_lorawan(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
                         fopt_tree = proto_item_add_subtree(fopt_ti, ett_fopts);
                         if (downlink_frame) {
                             proto_tree_add_item(fopt_tree, hf_dlfopt_CID, tvb, offset, 1, ENC_NA);
-			    switch (foption) {
-			    case LINKCHECKANS:
-			      // 2 bytes Margin and GwCnt
-			      proto_tree_add_item(fopt_tree, hf_dlfopt_margin, tvb, offset+1, 1, ENC_NA);
-			      proto_tree_add_item(fopt_tree, hf_dlfopt_gwCnt, tvb, offset+2, 1, ENC_NA);
-			      
-			      break;
-			    case LINKADRREQ:
-			    case DUTYCYCLEREQ:
-			    case RXPARAMSETUPREQ:
-			    case DEVSTATUSREQ:
-			    case NEWCHANNELREQ:
-			    case RXTIMINGSETUPREQ: 
-			    case TXPARAMSETUPREQ:
-			    case DLCHANNELREQ:
-			      break;
-			    default:
-			      break;
-			    }
+			                switch (foption) {
+                            case LINKCHECKANS:
+			                    // 2 bytes Margin and GwCnt
+                                proto_tree_add_item(fopt_tree, hf_dlfopt_margin, tvb, offset+1, 1, ENC_NA);
+                                proto_tree_add_item(fopt_tree, hf_dlfopt_gwCnt, tvb, offset+2, 1, ENC_NA);
+                			    break;
+                            case LINKADRREQ:
+                            case DUTYCYCLEREQ:
+                            case RXPARAMSETUPREQ:
+                            case DEVSTATUSREQ:
+                            case NEWCHANNELREQ:
+                            case RXTIMINGSETUPREQ:
+                            case TXPARAMSETUPREQ:
+                            case DLCHANNELREQ:
+                                break;
+                            default:
+                                break;
+                            }
                         }
                         else {
                             proto_tree_add_item(fopt_tree, hf_ulfopt_CID, tvb, offset, 1, ENC_NA);
-			    switch (foption) {
-			    case LINKCHECKREQ:
-			    case LINKADRANS:
-			    case DUTYCYCLEANS:
-			    case RXPARAMSETUPANS:
-			    case DEVSTATUSANS:
-			    case NEWCHANNELANS:
-			    case RXTIMINGSETUPANS:
-			    case TXPARAMSETUPANS:
-			    case DLCHANNELANS:
-			      break;
-			    default:
-			      break;
-			    }
+                            switch (foption) {
+                            case LINKCHECKREQ:
+                            case LINKADRANS:
+                            case DUTYCYCLEANS:
+                            case RXPARAMSETUPANS:
+                            case DEVSTATUSANS:
+                            case NEWCHANNELANS:
+                            case RXTIMINGSETUPANS:
+                            case TXPARAMSETUPANS:
+                                break;
+                            default:
+                                break;
+                            }
                         }
                         offset += foption_length;
                         remaining_optslen -= foption_length;
@@ -379,17 +377,26 @@ dissect_lorawan(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
                     }
 
                 }
-                offset = offset_to_options + foptslen;
+                offset = offset_to_options + foptslen; // set offset fresh from start of option bytes
             }
             // if payload not empty, 1 byte of FPort and variable number of bytes of actual payload
             guint payload_length;
             if (tvb_reported_length(tvb) == tvb_captured_length(tvb)) {
                 payload_length = tvb_captured_length(tvb)-offset-4;
+                printf ("payload lentgh : %d\n", payload_length);
+                // do the job
+                if (payload_length>0) {
+                    proto_tree_add_item(lorawan_tree, hf_lorawan_fport, tvb, offset, 1, ENC_NA);
+                    offset += 1;
+                }
+                if (payload_length>1) {
+                    proto_tree_add_item(lorawan_tree, hf_lorawan_frmpayload, tvb, offset, payload_length-1, ENC_NA);
+                    offset += payload_length-1;
+                }
             } else {
-                // case not covered, bail out
+                // the case were Wireshark did not capture the full packet is not covered, bail out
                 break;
             }
-            ;
             break;
         case PROP : 
             break;
@@ -399,8 +406,8 @@ dissect_lorawan(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
             // all possible cases are covered, one should never reach default
             break;
         }
-
-       return tvb_captured_length(tvb);
+        proto_tree_add_item(lorawan_tree, hf_lorawan_mic, tvb, offset, 4, ENC_NA);
+        return tvb_captured_length(tvb);
 
 }
 
