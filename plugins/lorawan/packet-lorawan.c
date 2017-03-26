@@ -304,21 +304,33 @@ dissect_lorawan(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
                 opts_item = proto_tree_add_item(lorawan_tree, hf_lorawan_fopts, tvb, offset, foptslen, ENC_NA);
                 proto_tree *opts_tree;
                 opts_tree = proto_item_add_subtree(opts_item, ett_fopts);
-                guint8 option1;
-                option1 = tvb_get_guint8(tvb, offset);
-                guint8 option1_length;
-                option1_length = (downlink_frame ? dl_command_length[option1] : ul_command_length[option1]);
-                proto_item *opt1_ti;
-                opt1_ti = proto_tree_add_item(opts_tree, hf_fopts_foption, tvb, offset, option1_length, ENC_NA);
-                proto_tree *opt1_tree;
-                opt1_tree = proto_item_add_subtree(opt1_ti, ett_fopts);
-                if (downlink_frame) {
-                    proto_tree_add_item(opt1_tree, hf_dlfopt_CID, tvb, offset, 1, ENC_NA);
+                guint8 remaining_optslen;
+                remaining_optslen=foptslen;
+                while (remaining_optslen>0) {
+                    guint8 foption;
+                    foption = tvb_get_guint8(tvb, offset);
+                    guint8 foption_length;
+                    foption_length = (downlink_frame ? dl_command_length[foption] : ul_command_length[foption]);
+                    if (foption_length<=remaining_optslen) { // double check that this option does not extend past the option bytes
+                        proto_item *fopt_ti;
+                        fopt_ti = proto_tree_add_item(opts_tree, hf_fopts_foption, tvb, offset, foption_length, ENC_NA);
+                        proto_tree *fopt_tree;
+                        fopt_tree = proto_item_add_subtree(fopt_ti, ett_fopts);
+                        if (downlink_frame) {
+                            proto_tree_add_item(fopt_tree, hf_dlfopt_CID, tvb, offset, 1, ENC_NA);
+                        }
+                        else {
+                            proto_tree_add_item(fopt_tree, hf_ulfopt_CID, tvb, offset, 1, ENC_NA);                    
+                        }
+                        offset += foption_length;
+                        remaining_optslen -= foption_length;
+                    }
+                    else { // we have a problem, stop dissecting options and report
+                        printf ("%d extraneous bytes while processing options\n", remaining_optslen);
+
+                    }
+
                 }
-                else {
-                    proto_tree_add_item(opt1_tree, hf_ulfopt_CID, tvb, offset, 1, ENC_NA);                    
-                }
-                offset += option1_length;
             }
             // if payload not empty, 1 byte of FPort and variable number of bytes of actual payload
             ;
@@ -423,7 +435,6 @@ proto_register_lorawan(void)
 {
     static hf_register_info hf[] = {
         { &hf_lorawan_mhdr, { "MHDR", "lorawan.mhdr", FT_UINT8, BASE_HEX, NULL, 0x0, NULL, HFILL }},
-        { &hf_lorawan_mic, { "MIC", "lorawan.mic", FT_UINT32, BASE_HEX, NULL, 0x0, NULL, HFILL }},
         { &hf_lorawan_appeui, { "AppEUI", "lorawan.appeui", FT_UINT64, BASE_HEX, NULL, 0x0, NULL, HFILL }},
         { &hf_lorawan_deveui, { "DevEUI", "lorawan.deveui", FT_UINT64, BASE_HEX, NULL, 0x0, NULL, HFILL }},
         { &hf_lorawan_devaddr, { "DevAddr", "lorawan.devaddr", FT_UINT32, BASE_HEX, NULL, 0x0, NULL, HFILL }},
@@ -446,10 +457,11 @@ proto_register_lorawan(void)
         { &hf_fctrl_foptslen, { "FOptsLen", "lorawan.fctrl.foptslen", FT_UINT8, BASE_DEC, NULL, (1 << 3) | (1 << 2) | (1 << 1) | (1 << 0), NULL, HFILL, }},
         { &hf_lorawan_fopts, { "FOpts", "lorawan.fopts", FT_BYTES, BASE_NONE, NULL, 0, NULL, HFILL }},
         { &hf_fopts_foption, { "FOption", "lorawan.fopts.foption", FT_BYTES, BASE_NONE, NULL, 0, NULL, HFILL }},
-        { &hf_dlfopt_CID, { "CID", "lorawan.fopts.foption.CID", FT_UINT8, BASE_HEX, VALS(&dl_fopts_optiontype), 0x00, NULL, HFILL }},
-        { &hf_ulfopt_CID, { "CID", "lorawan.fopts.foption.CID", FT_UINT8, BASE_HEX, VALS(&ul_fopts_optiontype), 0x00, NULL, HFILL }},
+        { &hf_dlfopt_CID, { "dlCID", "lorawan.fopts.foption.dlCID", FT_UINT8, BASE_HEX, VALS(&dl_fopts_optiontype), 0x00, NULL, HFILL }},
+        { &hf_ulfopt_CID, { "ulCID", "lorawan.fopts.foption.ulCID", FT_UINT8, BASE_HEX, VALS(&ul_fopts_optiontype), 0x00, NULL, HFILL }},
         { &hf_lorawan_fport, { "FPort", "lorawan.fport", FT_UINT8, BASE_DEC, NULL, 0, NULL, HFILL }},
-        { &hf_lorawan_frmpayload, { "FRMPayload", "lorawan.frmpayload", FT_BYTES, BASE_NONE, NULL, 0, NULL, HFILL }}
+        { &hf_lorawan_frmpayload, { "FRMPayload", "lorawan.frmpayload", FT_BYTES, BASE_NONE, NULL, 0, NULL, HFILL }},
+        { &hf_lorawan_mic, { "MIC", "lorawan.mic", FT_UINT32, BASE_HEX, NULL, 0x0, NULL, HFILL }}
     };
 
     static gint *ett[] = {
