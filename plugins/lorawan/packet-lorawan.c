@@ -32,6 +32,8 @@ static int hf_lorawan_fopts = -1;
 static int hf_fopts_foption = -1;
 static int hf_dlfopt_CID = -1;
 static int hf_ulfopt_CID = -1;
+static int hf_dlfopt_margin = -1;
+static int hf_dlfopt_gwCnt = -1;
 static int hf_lorawan_fport = -1;
 static int hf_lorawan_frmpayload = -1;
 static gint ett_lorawan = -1;
@@ -318,9 +320,42 @@ dissect_lorawan(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
                         fopt_tree = proto_item_add_subtree(fopt_ti, ett_fopts);
                         if (downlink_frame) {
                             proto_tree_add_item(fopt_tree, hf_dlfopt_CID, tvb, offset, 1, ENC_NA);
+			    switch (foption) {
+			    case LINKCHECKANS:
+			      // 2 bytes Margin and GwCnt
+			      proto_tree_add_item(fopt_tree, hf_dlfopt_margin, tvb, offset+1, 1, ENC_NA);
+			      proto_tree_add_item(fopt_tree, hf_dlfopt_gwCnt, tvb, offset+2, 1, ENC_NA);
+			      
+			      break;
+			    case LINKADRREQ:
+			    case DUTYCYCLEREQ:
+			    case RXPARAMSETUPREQ:
+			    case DEVSTATUSREQ:
+			    case NEWCHANNELREQ:
+			    case RXTIMINGSETUPREQ: 
+			    case TXPARAMSETUPREQ:
+			    case DLCHANNELREQ:
+			      break;
+			    default:
+			      break;
+			    }
                         }
                         else {
-                            proto_tree_add_item(fopt_tree, hf_ulfopt_CID, tvb, offset, 1, ENC_NA);                    
+                            proto_tree_add_item(fopt_tree, hf_ulfopt_CID, tvb, offset, 1, ENC_NA);
+			    switch (foption) {
+			    case LINKCHECKREQ:
+			    case LINKADRANS:
+			    case DUTYCYCLEANS:
+			    case RXPARAMSETUPANS:
+			    case DEVSTATUSANS:
+			    case NEWCHANNELANS:
+			    case RXTIMINGSETUPANS:
+			    case TXPARAMSETUPANS:
+			    case DLCHANNELANS:
+			      break;
+			    default:
+			      break;
+			    }
                         }
                         offset += foption_length;
                         remaining_optslen -= foption_length;
@@ -459,6 +494,8 @@ proto_register_lorawan(void)
         { &hf_fopts_foption, { "FOption", "lorawan.fopts.foption", FT_BYTES, BASE_NONE, NULL, 0, NULL, HFILL }},
         { &hf_dlfopt_CID, { "dlCID", "lorawan.fopts.foption.dlCID", FT_UINT8, BASE_HEX, VALS(&dl_fopts_optiontype), 0x00, NULL, HFILL }},
         { &hf_ulfopt_CID, { "ulCID", "lorawan.fopts.foption.ulCID", FT_UINT8, BASE_HEX, VALS(&ul_fopts_optiontype), 0x00, NULL, HFILL }},
+        { &hf_dlfopt_margin, { "Margin", "lorawan.fopts.foption.margin", FT_UINT8, BASE_DEC, NULL, 0x00, NULL, HFILL }},
+        { &hf_dlfopt_gwCnt, { "Gateway Count", "lorawan.fopts.foption.gwcnt", FT_UINT8, BASE_DEC, NULL, 0x00, NULL, HFILL }},
         { &hf_lorawan_fport, { "FPort", "lorawan.fport", FT_UINT8, BASE_DEC, NULL, 0, NULL, HFILL }},
         { &hf_lorawan_frmpayload, { "FRMPayload", "lorawan.frmpayload", FT_BYTES, BASE_NONE, NULL, 0, NULL, HFILL }},
         { &hf_lorawan_mic, { "MIC", "lorawan.mic", FT_UINT32, BASE_HEX, NULL, 0x0, NULL, HFILL }}
