@@ -30,6 +30,8 @@ static int hf_fctrl_rfu4 = -1;
 static int hf_fctrl_foptslen = -1;
 static int hf_lorawan_fopts = -1;
 static int hf_fopts_foption = -1;
+static int hf_dlfopt_CID = -1;
+static int hf_ulfopt_CID = -1;
 static int hf_lorawan_fport = -1;
 static int hf_lorawan_frmpayload = -1;
 static gint ett_lorawan = -1;
@@ -114,25 +116,28 @@ static guint8 const dl_command_length[] = {
     5  // DLCHANNELREQ     0x0A
 };
 
-
-static value_string const fopts_optiontype[] = {
-    {LINKCHECKREQ,      "LinkCheckReq"    },
+static value_string const dl_fopts_optiontype[] = {
     {LINKCHECKANS,      "LinkCheckAns"    },
     {LINKADRREQ,        "LinkADRReq"      },
-    {LINKADRANS,        "LinkADRAns"      },
     {DUTYCYCLEREQ,      "DutyCycleReq"    },
-    {DUTYCYCLEANS,      "DutyCycleAns"    },
     {RXPARAMSETUPREQ,   "RxParamSetupReq" },
-    {RXPARAMSETUPANS,   "RxParamSetupAns" },
     {DEVSTATUSREQ,      "DevStatusReq"    },
-    {DEVSTATUSANS,      "DevStatusAns"    },
     {NEWCHANNELREQ,     "NewChannelReq"   },
-    {NEWCHANNELANS,     "NewChannelAns"   },
     {RXTIMINGSETUPREQ,  "RxTimingSetupReq"},
-    {RXTIMINGSETUPANS,  "RxTimingSetupAns"},
     {TXPARAMSETUPREQ,   "TxParamSetupReq" },
-    {TXPARAMSETUPANS,   "TxParamSetupAns" },
     {DLCHANNELREQ,      "DlChannelReq"    },
+    {0,                 NULL}
+};
+
+static value_string const ul_fopts_optiontype[] = {
+    {LINKCHECKREQ,      "LinkCheckReq"    },
+    {LINKADRANS,        "LinkADRAns"      },
+    {DUTYCYCLEANS,      "DutyCycleAns"    },
+    {RXPARAMSETUPANS,   "RxParamSetupAns" },
+    {DEVSTATUSANS,      "DevStatusAns"    },
+    {NEWCHANNELANS,     "NewChannelAns"   },
+    {RXTIMINGSETUPANS,  "RxTimingSetupAns"},
+    {TXPARAMSETUPANS,   "TxParamSetupAns" },
     {DLCHANNELANS,      "DlChannelAns"    },
     {0,                 NULL}
 };
@@ -208,7 +213,7 @@ dissect_lorawan(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
         temp = data; // same
         data = temp; // same
 
-        col_set_str(pinfo->cinfo, COL_PROTOCOL, "LORA");
+        col_set_str(pinfo->cinfo, COL_PROTOCOL, "LoRaWAN");
         col_clear(pinfo->cinfo, COL_INFO);
 
 
@@ -302,11 +307,18 @@ dissect_lorawan(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
                 guint8 option1;
                 option1 = tvb_get_guint8(tvb, offset);
                 guint8 option1_length;
-                option1_length = dl_command_length[option1];
-                option1_length = ul_command_length[option1];
-                proto_item *opts_opt1;
-                opts_opt1 = proto_tree_add_item(opts_tree, hf_fopts_foption, tvb, offset, 1, ENC_NA);
-                offset += foptslen;
+                option1_length = (downlink_frame ? dl_command_length[option1] : ul_command_length[option1]);
+                proto_item *opt1_ti;
+                opt1_ti = proto_tree_add_item(opts_tree, hf_fopts_foption, tvb, offset, option1_length, ENC_NA);
+                proto_tree *opt1_tree;
+                opt1_tree = proto_item_add_subtree(opt1_ti, ett_fopts);
+                if (downlink_frame) {
+                    proto_tree_add_item(opt1_tree, hf_dlfopt_CID, tvb, offset, 1, ENC_NA);
+                }
+                else {
+                    proto_tree_add_item(opt1_tree, hf_ulfopt_CID, tvb, offset, 1, ENC_NA);                    
+                }
+                offset += option1_length;
             }
             // if payload not empty, 1 byte of FPort and variable number of bytes of actual payload
             ;
@@ -410,162 +422,34 @@ void
 proto_register_lorawan(void)
 {
     static hf_register_info hf[] = {
-        { &hf_lorawan_mhdr, {
-            "MHDR", "lorawan.mhdr",
-            FT_UINT8, BASE_HEX,
-            NULL, 0x0,
-            NULL, HFILL
-        }},
-        { &hf_lorawan_mic, {
-            "MIC", "lorawan.mic",
-            FT_UINT32, BASE_HEX,
-            NULL, 0x0,
-            NULL, HFILL
-        }},
-        { &hf_lorawan_appeui, {
-            "AppEUI", "lorawan.appeui",
-            FT_UINT64, BASE_HEX,
-            NULL, 0x0,
-            NULL, HFILL
-        }},
-        { &hf_lorawan_deveui, {
-            "DevEUI", "lorawan.deveui",
-            FT_UINT64, BASE_HEX,
-            NULL, 0x0,
-            NULL, HFILL
-        }},
-        { &hf_lorawan_devaddr, {
-            "DevAddr", "lorawan.devaddr",
-            FT_UINT32, BASE_HEX,
-            NULL, 0x0,
-            NULL, HFILL
-        }},
-        { &hf_lorawan_dlsettings, {
-            "DLSettings", "lorawan.dlsettings",
-            FT_UINT8, BASE_HEX,
-            NULL, 0x0,
-            NULL, HFILL
-        }},
-        { &hf_lorawan_devnonce, {
-            "DevNonce", "lorawan.devnonce",
-            FT_UINT16, BASE_HEX,
-            NULL, 0x0,
-            NULL, HFILL
-        }},
-        { &hf_lorawan_appnonce, {
-            "AppNonce", "lorawan.appnonce",
-            FT_UINT24, BASE_HEX,
-            NULL, 0x0,
-            NULL, HFILL
-        }},
-        { &hf_lorawan_netid, {
-            "NetID", "lorawan.netid",
-            FT_UINT24, BASE_HEX,
-            NULL, 0x0,
-            NULL, HFILL
-        }},
-        { &hf_lorawan_rxdelay, {
-            "RxDelay", "lorawan.rxdelay",
-            FT_UINT8, BASE_HEX,
-            NULL, 0x0,
-            NULL, HFILL
-        }},
-        { &hf_lorawan_fctrl, {
-            "FCtrl", "lorawan.fctrl",
-            FT_UINT8, BASE_HEX,
-            NULL, 0x0,
-            NULL, HFILL
-        }},
-        { &hf_lorawan_fcnt, {
-            "FCnt", "lorawan.fcnt",
-            FT_UINT16, BASE_DEC,
-            NULL, 0x0,
-            NULL, HFILL
-        }},
-        { &hf_mhdr_mtype, {
-            "MType", "lorawan.mhdr.mtype",
-            FT_UINT8, BASE_HEX,
-            VALS(&mhdr_mtype), (1 << 7) | (1 << 6) | (1 << 5),
-            NULL, HFILL
-        }},
-        { &hf_mhdr_rfu, {
-            "Reserved", "lorawan.mhdr.rfu",
-            FT_BOOLEAN, 8,
-            TFS(&tfs_set_notset), (1 << 4) | (1 << 3) | (1 << 2),
-            NULL, HFILL
-        }},
-        { &hf_mhdr_major, {
-            "Major", "lorawan.mhdr.major",
-            FT_UINT8, BASE_DEC,
-            NULL, (1 << 1) | (1 << 0),
-            NULL, HFILL
-        }},
-        { &hf_fctrl_adr, {
-            "ADR (Adaptative Data Rate)", "lorawan.fctrl.adr",
-            FT_BOOLEAN, 8,
-            TFS(&tfs_enabled_disabled), (1 << 7),
-            NULL, HFILL
-        }},
-        { &hf_fctrl_adrackreq, {
-            "ADRACKReq", "lorawan.fctrl.adrackreq",
-            FT_BOOLEAN, 8,
-            TFS(&tfs_set_notset), (1 << 6),
-            NULL, HFILL
-        }},
-        { &hf_fctrl_rfu6, {
-            "RFU", "lorawan.fctrl.rfu6",
-            FT_BOOLEAN, 8,
-            TFS(&tfs_set_notset), (1 << 6),
-            NULL, HFILL
-        }},
-        { &hf_fctrl_ack, {
-            "ACK", "lorawan.fctrl.ack",
-            FT_BOOLEAN, 8,
-            TFS(&tfs_ack_nack), (1 << 5),
-            NULL, HFILL
-        }},
-        { &hf_fctrl_rfu4, {
-            "RFU", "lorawan.fctrl.rfu4",
-            FT_BOOLEAN, 8,
-            TFS(&tfs_set_notset), (1 << 4),
-            NULL, HFILL
-        }},
-        { &hf_fctrl_fpending, {
-            "FPending", "lorawan.fctrl.fpending",
-            FT_BOOLEAN, 8,
-            TFS(&tfs_set_notset), (1 << 4),
-            NULL, HFILL
-        }},
-        { &hf_fctrl_foptslen, {
-            "FOptsLen", "lorawan.fctrl.foptslen",
-            FT_UINT8, BASE_DEC,
-            NULL, (1 << 3) | (1 << 2) | (1 << 1) | (1 << 0),
-            NULL, HFILL,
-        }},
-        { &hf_lorawan_fopts, {
-            "FOpts", "lorawan.fopts",
-            FT_BYTES, BASE_NONE,
-            NULL, 0,
-            NULL, HFILL
-        }},
-        { &hf_fopts_foption, {
-            "FOption", "lorawan.fopts.foption",
-            FT_UINT8, BASE_HEX,
-            VALS(&fopts_optiontype), 0xFF,
-            NULL, HFILL
-        }},
-        { &hf_lorawan_fport, {
-            "FPort", "lorawan.fport",
-            FT_UINT8, BASE_DEC,
-            NULL, 0,
-            NULL, HFILL
-        }},
-        { &hf_lorawan_frmpayload, {
-            "FRMPayload", "lorawan.frmpayload",
-            FT_BYTES, BASE_NONE,
-            NULL, 0,
-            NULL, HFILL
-        }}
+        { &hf_lorawan_mhdr, { "MHDR", "lorawan.mhdr", FT_UINT8, BASE_HEX, NULL, 0x0, NULL, HFILL }},
+        { &hf_lorawan_mic, { "MIC", "lorawan.mic", FT_UINT32, BASE_HEX, NULL, 0x0, NULL, HFILL }},
+        { &hf_lorawan_appeui, { "AppEUI", "lorawan.appeui", FT_UINT64, BASE_HEX, NULL, 0x0, NULL, HFILL }},
+        { &hf_lorawan_deveui, { "DevEUI", "lorawan.deveui", FT_UINT64, BASE_HEX, NULL, 0x0, NULL, HFILL }},
+        { &hf_lorawan_devaddr, { "DevAddr", "lorawan.devaddr", FT_UINT32, BASE_HEX, NULL, 0x0, NULL, HFILL }},
+        { &hf_lorawan_dlsettings, { "DLSettings", "lorawan.dlsettings", FT_UINT8, BASE_HEX, NULL, 0x0, NULL, HFILL }},
+        { &hf_lorawan_devnonce, { "DevNonce", "lorawan.devnonce", FT_UINT16, BASE_HEX, NULL, 0x0, NULL, HFILL }},
+        { &hf_lorawan_appnonce, { "AppNonce", "lorawan.appnonce", FT_UINT24, BASE_HEX, NULL, 0x0, NULL, HFILL }},
+        { &hf_lorawan_netid, { "NetID", "lorawan.netid", FT_UINT24, BASE_HEX, NULL, 0x0, NULL, HFILL }},
+        { &hf_lorawan_rxdelay, { "RxDelay", "lorawan.rxdelay", FT_UINT8, BASE_HEX, NULL, 0x0, NULL, HFILL }},
+        { &hf_lorawan_fctrl, { "FCtrl", "lorawan.fctrl", FT_UINT8, BASE_HEX, NULL, 0x0, NULL, HFILL }},
+        { &hf_lorawan_fcnt, { "FCnt", "lorawan.fcnt", FT_UINT16, BASE_DEC, NULL, 0x0, NULL, HFILL }},
+        { &hf_mhdr_mtype, { "MType", "lorawan.mhdr.mtype", FT_UINT8, BASE_HEX, VALS(&mhdr_mtype), (1 << 7) | (1 << 6) | (1 << 5), NULL, HFILL }},
+        { &hf_mhdr_rfu, { "Reserved", "lorawan.mhdr.rfu", FT_BOOLEAN, 8, TFS(&tfs_set_notset), (1 << 4) | (1 << 3) | (1 << 2), NULL, HFILL }},
+        { &hf_mhdr_major, { "Major", "lorawan.mhdr.major", FT_UINT8, BASE_DEC, NULL, (1 << 1) | (1 << 0), NULL, HFILL }},
+        { &hf_fctrl_adr, { "ADR (Adaptative Data Rate)", "lorawan.fctrl.adr", FT_BOOLEAN, 8, TFS(&tfs_enabled_disabled), (1 << 7), NULL, HFILL }},
+        { &hf_fctrl_adrackreq, { "ADRACKReq", "lorawan.fctrl.adrackreq", FT_BOOLEAN, 8, TFS(&tfs_set_notset), (1 << 6), NULL, HFILL }},
+        { &hf_fctrl_rfu6, { "RFU", "lorawan.fctrl.rfu6", FT_BOOLEAN, 8, TFS(&tfs_set_notset), (1 << 6), NULL, HFILL }},
+        { &hf_fctrl_ack, { "ACK", "lorawan.fctrl.ack", FT_BOOLEAN, 8, TFS(&tfs_ack_nack), (1 << 5), NULL, HFILL }},
+        { &hf_fctrl_rfu4, { "RFU", "lorawan.fctrl.rfu4", FT_BOOLEAN, 8, TFS(&tfs_set_notset), (1 << 4), NULL, HFILL }},
+        { &hf_fctrl_fpending, { "FPending", "lorawan.fctrl.fpending", FT_BOOLEAN, 8, TFS(&tfs_set_notset), (1 << 4), NULL, HFILL }},
+        { &hf_fctrl_foptslen, { "FOptsLen", "lorawan.fctrl.foptslen", FT_UINT8, BASE_DEC, NULL, (1 << 3) | (1 << 2) | (1 << 1) | (1 << 0), NULL, HFILL, }},
+        { &hf_lorawan_fopts, { "FOpts", "lorawan.fopts", FT_BYTES, BASE_NONE, NULL, 0, NULL, HFILL }},
+        { &hf_fopts_foption, { "FOption", "lorawan.fopts.foption", FT_BYTES, BASE_NONE, NULL, 0, NULL, HFILL }},
+        { &hf_dlfopt_CID, { "CID", "lorawan.fopts.foption.CID", FT_UINT8, BASE_HEX, VALS(&dl_fopts_optiontype), 0x00, NULL, HFILL }},
+        { &hf_ulfopt_CID, { "CID", "lorawan.fopts.foption.CID", FT_UINT8, BASE_HEX, VALS(&ul_fopts_optiontype), 0x00, NULL, HFILL }},
+        { &hf_lorawan_fport, { "FPort", "lorawan.fport", FT_UINT8, BASE_DEC, NULL, 0, NULL, HFILL }},
+        { &hf_lorawan_frmpayload, { "FRMPayload", "lorawan.frmpayload", FT_BYTES, BASE_NONE, NULL, 0, NULL, HFILL }}
     };
 
     static gint *ett[] = {
@@ -576,11 +460,11 @@ proto_register_lorawan(void)
     };
 
     proto_lorawan = proto_register_protocol(
-        "LoRaWAN 1.0.1",
+        "LoRaWAN 1.0.2",
         "lorawan",
         "lorawan"
     );
-    //printf ("registered protocol %s returned handle = %d\n", "lorawan", proto_lorawan);
+
     proto_register_field_array(proto_lorawan, hf, array_length(hf));
     proto_register_subtree_array(ett, array_length(ett));
     
