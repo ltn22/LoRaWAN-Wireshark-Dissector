@@ -475,9 +475,9 @@ proto_register_lorawan(void)
 void
 proto_reg_handoff_lorawan(void)
 {
-    static dissector_handle_t lorawan_handle;
+//    static dissector_handle_t lorawan_handle;
 
-    lorawan_handle = create_dissector_handle(dissect_lorawan, proto_lorawan);
+//    lorawan_handle = create_dissector_handle(dissect_lorawan, proto_lorawan);
 //    dissector_add_uint("sensorlab.eventID", 0x34, lorawan_handle);
 //    dissector_add_uint("104asdu.addr", 1, lorawan_handle);
 //    dissector_add_uint("104asdu.addr", 10, lorawan_handle);
