@@ -26,11 +26,13 @@ static int hf_fctrl_ack = -1;
 static int hf_fctrl_fpending = -1;
 static int hf_fctrl_foptslen = -1;
 static int hf_lorawan_fopts = -1;
+static int hf_fopts_foption = -1;
 static int hf_lorawan_fport = -1;
 static int hf_lorawan_frmpayload = -1;
 static gint ett_lorawan = -1;
 static gint ett_mhdr = -1;
 static gint ett_fctrl = -1;
+static gint ett_fopts = -1;
 
 #define MTYPE(a, b, c) ((a << 2) | (b << 1) | (c << 0))
 
@@ -53,6 +55,83 @@ static value_string const mhdr_mtype[] = {
     {RFU,           "Reserved for Future Usage"},
     {PROP,          "Proprietary"},
     {0,             NULL}
+};
+
+// uplink MAC commands
+#define LINKCHECKREQ     0x02
+#define LINKADRANS       0x03
+#define DUTYCYCLEANS     0x04
+#define RXPARAMSETUPANS  0x05
+#define DEVSTATUSANS     0x06
+#define NEWCHANNELANS    0x07
+#define RXTIMINGSETUPANS 0x08
+#define TXPARAMSETUPANS  0x09
+#define DLCHANNELANS     0x0A
+
+// size of MAC commands, including CID byte
+// 0 means unknown
+static guint8 const ul_command_length[] = {
+    0, // 0 unknown
+    0, // 1 unknown
+    1, // LINKCHECKREQ     0x02
+    2, // LINKADRANS       0x03
+    1, // DUTYCYCLEANS     0x04
+    2, // RXPARAMSETUPANS  0x05
+    3, // DEVSTATUSANS     0x06
+    2, // NEWCHANNELANS    0x07
+    1, // RXTIMINGSETUPANS 0x08
+    1, // TXPARAMSETUPANS  0x09
+    2  // DLCHANNELANS     0x0A
+};
+
+// downlink MAC commands
+#define LINKCHECKANS     0x02
+#define LINKADRREQ       0x03
+#define DUTYCYCLEREQ     0x04
+#define RXPARAMSETUPREQ  0x05
+#define DEVSTATUSREQ     0x06
+#define NEWCHANNELREQ    0x07
+#define RXTIMINGSETUPREQ 0x08
+#define TXPARAMSETUPREQ  0x09
+#define DLCHANNELREQ     0x0A
+
+#define MAXKNOWNOPTION   0x0A
+
+static guint8 const dl_command_length[] = {
+    0, // 0 unknown
+    0, // 1 unknown
+    3, // LINKCHECKANS     0x02
+    5, // LINKADRREQ       0x03
+    2, // DUTYCYCLEREQ     0x04
+    5, // RXPARAMSETUPREQ  0x05
+    1, // DEVSTATUSREQ     0x06
+    6, // NEWCHANNELREQ    0x07
+    2, // RXTIMINGSETUPREQ 0x08
+    2, // TXPARAMSETUPREQ  0x09
+    5  // DLCHANNELREQ     0x0A
+};
+
+
+static value_string const fopts_optiontype[] = {
+    {LINKCHECKREQ,      "LinkCheckReq"    },
+    {LINKCHECKANS,      "LinkCheckAns"    },
+    {LINKADRREQ,        "LinkADRReq"      },
+    {LINKADRANS,        "LinkADRAns"      },
+    {DUTYCYCLEREQ,      "DutyCycleReq"    },
+    {DUTYCYCLEANS,      "DutyCycleAns"    },
+    {RXPARAMSETUPREQ,   "RxParamSetupReq" },
+    {RXPARAMSETUPANS,   "RxParamSetupAns" },
+    {DEVSTATUSREQ,      "DevStatusReq"    },
+    {DEVSTATUSANS,      "DevStatusAns"    },
+    {NEWCHANNELREQ,     "NewChannelReq"   },
+    {NEWCHANNELANS,     "NewChannelAns"   },
+    {RXTIMINGSETUPREQ,  "RxTimingSetupReq"},
+    {RXTIMINGSETUPANS,  "RxTimingSetupAns"},
+    {TXPARAMSETUPREQ,   "TxParamSetupReq" },
+    {TXPARAMSETUPANS,   "TxParamSetupAns" },
+    {DLCHANNELREQ,      "DlChannelReq"    },
+    {DLCHANNELANS,      "DlChannelAns"    },
+    {0,                 NULL}
 };
 
 #include <stdio.h>
@@ -190,7 +269,19 @@ dissect_lorawan(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
             offset += 2;
             // process 0 to 15 bytes of Frame Options (FOpts)
             if (foptslen > 0) {
-                proto_tree_add_item(lorawan_tree, hf_lorawan_fopts, tvb, offset, foptslen, ENC_LITTLE_ENDIAN);
+
+                printf ("foptslen = %d\n", foptslen);
+                proto_item *opts_item;
+                opts_item = proto_tree_add_item(lorawan_tree, hf_lorawan_fopts, tvb, offset, foptslen, ENC_NA);
+                proto_tree *opts_tree;
+                opts_tree = proto_item_add_subtree(opts_item, ett_fopts);
+                guint8 option1;
+                option1 = tvb_get_guint8(tvb, offset);
+                guint8 option1_length;
+                option1_length = dl_command_length[option1];
+                option1_length = ul_command_length[option1];
+                proto_item *opts_opt1;
+                opts_opt1 = proto_tree_add_item(opts_tree, hf_fopts_foption, tvb, offset, 1, ENC_NA);
                 offset += foptslen;
             }
             // if payload not empty, 1 byte of FPort and variable number of bytes of actual payload
@@ -421,6 +512,12 @@ proto_register_lorawan(void)
             NULL, 0,
             NULL, HFILL
         }},
+        { &hf_fopts_foption, {
+            "FOption", "lorawan.fopts.foption",
+            FT_UINT8, BASE_HEX,
+            VALS(&fopts_optiontype), 0xFF,
+            NULL, HFILL
+        }},
         { &hf_lorawan_fport, {
             "FPort", "lorawan.fport",
             FT_UINT8, BASE_DEC,
@@ -438,7 +535,8 @@ proto_register_lorawan(void)
     static gint *ett[] = {
         &ett_lorawan,
         &ett_mhdr,
-        &ett_fctrl
+        &ett_fctrl,
+        &ett_fopts
     };
 
     proto_lorawan = proto_register_protocol(
